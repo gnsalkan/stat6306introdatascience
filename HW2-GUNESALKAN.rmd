@@ -1,0 +1,20 @@
+---
+title: "HW2-GUNESALKAN"
+author: "Gunes Alkan"
+date: "September 3, 2015"
+output: html_document
+---
+#This is the bar chart of my data science profile
+
+```{r, echo=FALSE}
+Skills<-c("Programming","Math","Stat","Machine Learning","Expertise","Communication","Data Viz")
+Ratings<-c(3,5,4,1,2,3,2)
+barplot(Ratings,names.arg=Skills,col="springgreen1",cex.names=0.70)
+```
+
+You can also embed plots, for example:
+
+```{r, echo=FALSE}
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
