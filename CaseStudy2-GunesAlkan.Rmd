@@ -1,0 +1,384 @@
+---
+title: "case study 2"
+author: "Gunes Alkan"
+date: "November 7, 2015"
+output: 
+  html_document: 
+    keep_md: yes
+---
+
+ A recently emerged field, Data Science, still does not have solid borders, and there are a lot of different perspectives and lack of clarity on the topic. One way to understand what is typically expected from a Data Scientist is to scrape / harvest a job website, and examine what skill set companies are looking for. Here, we will work on the job descriptions collected from the website called "CyberCoders", and R will be used as the software package. We will, first, define our own functions to make sure that the case study is reproducible at any time by anybody, so that a broad function will use the small functions defined, and will require only the name of job (in this case it will be: Data Scientist). Here, salary range, and location of job can also be found, but we will rather be interested in skill sets. Finally, after scraping all Data Science job posts on CyberCoders, we'll visualize the results to make the conclusion more understandable.
+
+
+```{r}
+#Required packages
+library(XML)
+library(bitops)
+library(RCurl)
+library(RColorBrewer)
+library(wordcloud)
+
+```
+
+```{r}
+
+# We first set variable StopWords
+StopWords = readLines("http://jmlr.csail.mit.edu/papers/volume5/lewis04a/a11-smart-stop-list/english.stop")
+
+###
+#and use them in a user defined function in order to use our own function to remove stopwords in the next step
+asWords = function(txt, stopWords = StopWords, stem = FALSE)
+{
+  words = unlist(strsplit(txt, '[[:space:]!.,;#:()/"]+'))
+  words = words[words != ""]
+  if(stem && require(Rlibstemmer))
+     words = wordStem(words)
+  i = tolower(words) %in% tolower(stopWords)
+  words[!i]
+}
+
+###
+# here we define a function to remove stopwords from the text we want
+removeStopWords = function(x, stopWords = StopWords) 
+     {
+         if(is.character(x))
+             setdiff(x, stopWords)
+         else if(is.list(x))
+             lapply(x, removeStopWords, stopWords)
+         else
+             x
+     }
+### 
+
+cy.getFreeFormWords = function(doc, stopWords = StopWords)
+     {
+         nodes = getNodeSet(doc, "//div[@class='job-details']/
+                                 div[@data-section]")
+         if(length(nodes) == 0) 
+             nodes = getNodeSet(doc, "//div[@class='job-details']//p")
+         
+         if(length(nodes) == 0) 
+             warning("did not find any nodes for the free form text in ",
+                     docName(doc))
+         
+         words = lapply(nodes,
+                        function(x)
+                            strsplit(xmlValue(x), 
+                                     "[[:space:][:punct:]]+"))
+         
+         removeStopWords(words, stopWords)
+     }
+
+```
+
+This fetches the lists of free-form text in the HTML document and then decomposes the text into the words in each element, using spaces and punctuation characters to separate them.
+
+Question 1: Implement the following two functions. Use the code we explored to extract the skill sets and salary and location information from the parsed HTML document.
+
+```{r}
+cy.getSkillList = function(doc)
+{
+  lis = getNodeSet(doc, "//div[@class = 'skills-section']//
+                         li[@class = 'skill-item']//
+                         span[@class = 'skill-name']")
+
+  sapply(lis, xmlValue)
+}
+
+
+cy.getDatePosted = function(doc)
+  { xmlValue(getNodeSet(doc, 
+                     "//div[@class = 'job-details']//
+                        div[@class='posted']/
+                        span/following-sibling::text()")[[1]],
+    trim = TRUE) 
+}
+
+cy.getLocationSalary = function(doc)
+{
+  ans = xpathSApply(doc, "//div[@class = 'job-info-main'][1]/div", xmlValue)
+  names(ans) = c("location", "salary")
+  ans
+}
+
+# cy.getSkillList(cydoc)
+# cy.getLocationSalary(cydoc)
+
+# The function `cy.ReadPost()` given below reads each job post. 
+# This function implements three other functions: `cy.getFreeFormWords()`, `cy.getSkillList()`, and `cy.getLocationSalary()`
+
+cy.readPost = function(u, stopWords = StopWords, doc = htmlParse(u))
+  {
+    ans = list(words = cy.getFreeFormWords(doc, stopWords),
+         datePosted = cy.getDatePosted(doc),
+         skills = cy.getSkillList(doc))
+    o = cy.getLocationSalary(doc)
+    ans[names(o)] = o
+    ans
+}
+
+### Reading posts programmatically
+
+# Obtain URLs for job posts
+txt = getForm("http://www.cybercoders.com/search/", searchterms = '"Data Scientist"',
+              searchlocation = "",  newsearch = "true", sorttype = "")
+
+# Parse the links
+doc = htmlParse(txt, asText = TRUE)
+links = getNodeSet(doc, "//div[@class = 'job-title']/a/@href")
+
+# Save the links in the vector joblinks
+joblinks <- getRelativeURL(as.character(links), "http://www.cybercoders.com/search/")
+
+# Read the posts
+posts <- lapply(joblinks,cy.readPost)
+
+###
+
+cy.getPostLinks = function(doc, baseURL = "http://www.cybercoders.com/search/") 
+  {
+    if(is.character(doc)) doc = htmlParse(doc)
+    links = getNodeSet(doc, "//div[@class = 'job-title']/a/@href") 
+    getRelativeURL(as.character(links), baseURL)
+}
+
+cy.readPagePosts = function(doc, links = cy.getPostLinks(doc, baseURL),
+baseURL = "http://www.cybercoders.com/search/")
+  {
+    if(is.character(doc)) doc = htmlParse(doc)
+    lapply(links, cy.readPost)
+ }
+```
+
+```{r}
+
+## Testing the function with the parsed version of the first page of results in object doc
+posts = cy.readPagePosts(doc)
+sapply(posts,`[[`, "salary")
+summary(sapply(posts, function(x) length(unlist(x$words))))
+
+```
+
+The following code chunk pulls it all together. The function `cy.getNextPageLink()` retrieves each page from CyberCoders and calls the other functions to parse each post in order to obtain information such as salary, skills, and location.
+
+```{r}
+# Test of concept
+# getNodeSet(doc, "//a[@rel='next']/@href")[[1]]
+## A function to get all pages
+cy.getNextPageLink = function(doc, baseURL = docName(doc))
+{
+  if(is.na(baseURL))
+     baseURL = "http://www.cybercoders.com/"
+  link = getNodeSet(doc, "//li[@class = 'lnk-next pager-item ']/a/@href")
+  if(length(link) == 0)
+    return(character())
+    link2 <- gsub("./", "search/",link[[1]])
+ getRelativeURL(link2, baseURL)
+}
+
+# Test the above function
+tmp = cy.getNextPageLink(doc, "http://www.cybercoders.com")
+```
+
+Now we have all we need to retrieve all job posts on Cyber Coders for a given search query.
+The following function puts it all together into a function that we can call with a search string for a job of interest. 
+The function submits the initial query and then reads the posts from each result page.
+
+
+```{r}
+cyberCoders =
+function(query)
+{
+   txt = getForm("http://www.cybercoders.com/search/",
+                  searchterms = query,  searchlocation = "",
+                  newsearch = "true",  sorttype = "")
+   doc = htmlParse(txt)
+
+   posts = list()
+   while(TRUE) {
+       posts = c(posts, cy.readPagePosts(doc))
+       nextPage = cy.getNextPageLink(doc)
+       if(length(nextPage) == 0)
+          break
+
+       nextPage = getURLContent(nextPage)
+       doc = htmlParse(nextPage, asText = TRUE)
+   }
+   invisible(posts)
+}
+```
+
+ The function cyberCoders is called below with the skill "Data Scientist". 
+ Then, we sort the skills and obtain all skills that are mentioned more than twice in the list.
+
+
+```{r}
+dataSciPosts = cyberCoders("Data Scientist")
+tt = sort(table(unlist(lapply(dataSciPosts, `[[`, "skills"))),
+           decreasing = TRUE)
+tt[tt >= 2]
+```
+
+The search term "Data Scientist" returned 146 results on CyberCoders this time. We should remember that the results we get from web scraping are not random, so it is very hard to make inferences to larger populations. 
+
+Now, let's organize data to be able to get meaningful results:
+
+
+```{r}
+#tt2 is a training set, which is a copy of tt:
+tt2 <- tt
+names(tt2) <- toupper(names(tt2)) 
+head(tt2)
+length(tt2)
+```
+
+ Now let's combine some similar words / word groups to get a more accurate skill set:
+
+```{r}
+## Combining similar words as groups
+# First, the names start with STATIST
+grep("+STATIST+", x=names(tt2)) # points outs where those names are
+#see what words including "Statist" are used
+tt2[18]
+tt2[24]
+tt2[25]
+tt2[39]
+tt2[54]
+tt2[93]
+tt2[94]
+tt2[285]
+tt2[288]
+tt2[282]
+tt2[283]
+tt2[284]
+tt2[286]
+tt2[293]
+i = (names(tt2) == "APPLIED STATISTICS")
+if (any(i)) names(tt2)[i] = "STATISTICS"
+i = (names(tt2) == "STATISTICAL METHODS")
+if (any(i)) names(tt2)[i] = "STATISTICS ANALYSIS"
+i = (names(tt2) == "STATISTICAL TECHNIQUES")
+if (any(i)) names(tt2)[i] = "STATISTICS ANALYSIS"
+i = (names(tt2) == "STATISTICAL & DATA ANALYSIS")
+if (any(i)) names(tt2)[i] = "STATISTICS ANALYSIS"
+i = (names(tt2) == "STRONG STATISTICS/ ANALYTICS")
+if (any(i)) names(tt2)[i] = "STATISTICS"
+
+# Now the names including SQL, UNIX, PRE
+grep("+SQ+", x=names(tt2))
+# tt2[6]
+# tt2[29]
+# tt2[45]
+# tt2[79]
+# tt2[90]
+# tt2[91]
+# tt2[163]
+# tt2[218]
+# tt2[246]
+# tt2[255]
+# tt2[277]
+i = (names(tt2) == "SQL")
+if (any(i)) names(tt2)[i] = "SQL LANGUAGE"
+i = (names(tt2) == "MYSQL")
+if (any(i)) names(tt2)[i] = "SQL LANGUAGE"
+i = (names(tt2) == "NOSQL")
+if (any(i)) names(tt2)[i] = "SQL LANGUAGE"
+i = (names(tt2) == "POSTGRESQL")
+if (any(i)) names(tt2)[i] = "SQL LANGUAGE"
+i = (names(tt2) == "SQL AND RELATIONAL DATABASES")
+if (any(i)) names(tt2)[i] = "SQL LANGUAGE"
+i = (names(tt2) == "SQL SERVER")
+if (any(i)) names(tt2)[i] = "SQL LANGUAGE"
+i = (names(tt2) == "EXPERIENCE FORMING COMPLEX SQL QUERIES")
+if (any(i)) names(tt2)[i] = "SQL LANGUAGE"
+i = (names(tt2) == "SQL QUERIES ")
+if (any(i)) names(tt2)[i] = "SQL LANGUAGE"
+
+
+grep("^UNI+", x=names(tt2))
+# tt2[97]
+# tt2[294]
+# tt2[295]
+i = (names(tt2) == "UNIX/LINUX")
+if (any(i)) names(tt2)[i] = "UNIX"
+i = (names(tt2) == "UNIX / LINUX")
+if (any(i)) names(tt2)[i] = "UNIX"
+
+grep("^PREDICT+", x=names(tt2))
+# tt2[15]
+# tt2[30]
+# tt2[80]
+# tt2[81]
+# tt2[235]
+i = (names(tt2) == "PREDICTIVE MODELING")
+if (any(i)) names(tt2)[i] = "PREDICTIVE ANALYTICS"
+i = (names(tt2) == "PREDICTIVE ANALYSIS")
+if (any(i)) names(tt2)[i] = "PREDICTIVE ANALYTICS"
+i = (names(tt2) == "PREDICTIVE ANALYSTICS")
+if (any(i)) names(tt2)[i] = "PREDICTIVE ANALYTICS"
+i = (names(tt2) == "PREDICTIVE MODELING AND ANALYTICS")
+if (any(i)) names(tt2)[i] = "PREDICTIVE ANALYTICS"
+
+grep("+MATH+", x=names(tt2))
+i = (names(tt2) == "APPLIED MATHEMATICS")
+if (any(i)) names(tt2)[i] = "MATHEMATICS"
+i = (names(tt2) == "STRONG MATH/PHYSICS BACKGROUND")
+if (any(i)) names(tt2)[i] = "MATHEMATICS"
+i = (names(tt2) == "MATHEMATICAL")
+if (any(i)) names(tt2)[i] = "MATHEMATICS"
+
+grep("^MACH+", x=names(tt2))
+i = (names(tt2) == "MACHINE LEARNING ALGORITHMS")
+if (any(i)) names(tt2)[i] = "MACHINE LEARNING"
+i = (names(tt2) == "MACHINE LEARNING (A PLUS)")
+if (any(i)) names(tt2)[i] = "MACHINE LEARNING"
+i = (names(tt2) == "MACHINE LEARNING LIBRARY")
+if (any(i)) names(tt2)[i] = "MACHINE LEARNING"
+i = (names(tt2) == "MACHINE LEARNING TECHNOLOGIES")
+if (any(i)) names(tt2)[i] = "MACHINE LEARNING"
+i = (names(tt2) == "MACHINE LEARNING (A PLUS)")
+if (any(i)) names(tt2)[i] = "MACHINE LEARNING"
+```
+
+ Here, I have combined terms like "Statistical Methods, Statistical/Data Analysis, Statistical Techniques" under the name of "Statistical Analysis", and "Strong Statistics, Applied Statistics and Statistics" under one name: "Statistics".
+ Also, skills related to SQL such as NOSQL, MYSQL are combined under the title of "SQL Language". Next, I have merged all similar skill sets related to Predictive Analysis as "Predictive Analytics", and math related skills as "Mathematics".
+ Lastly, "Machine Learning Algorithms, Machine Learning Techniques" and similar terms are combined as "Machine Learning" which appeared to be the most commonly expected skill of a Data Scientist on this website.
+
+```{r,echo=FALSE}
+#i <- grepl("+STATIST+", x=names(tt2))
+#if (any(i)) names(tt2)[i] = "Statistics"
+#i <- grep("+SQ+", x=names(tt2))
+#if (any(i)) names(tt2)[i] = "SQL LANGUAGE"
+#j <- grep("^UNI+", x=names(tt2))
+#if (any(j)) names(tt2)[j] = "UNIX"
+#k <- grep("^PREDICT+", x=names(tt2))
+#if (any(k)) names(tt2)[k] = "PREDICTIVE ANALYSIS"
+#j <- grep("+MATH+", x=names(tt2))
+#if (any(j)) names(tt2)[j] = "MATHEMATICS"
+#i <- grep("^MACH+", x=names(tt2))
+#if (any(i)) names(tt)[i] = "MACHINE LEARNING"
+# Reorganizes tt with replacements
+# tt3 <- tt2
+# names(tt3) <- names(table(tt3))
+```
+
+ We were able to explicitly extract the necessary keywords from CyberCoders. Now, let's visualize our results in order to see which skill sets and technologies are important for different types of Data Science jobs corresponding to our search query:
+
+```{r}
+dotchart(sort(tt2[tt2 > 7]),color=1:4, cex = 0.7, main= "Skills from Data Scientists on CyberCoders")
+```
+
+ Here the words that appeared at least 7 times are plotted. We see that according to the website CyberCoders, skill that is expected most is about Machine Learning, then the programming tool Python and so on. Here, it is clearly showed that R and SAS are one of the most commonly required programming languages by those companies. Also, Statistical Modeling, Statistical Analysis and Statistics itself appeared to be one of the inevitably important skills of a potential data scientist.
+
+ Now, let's create a different display, a wordcloud, to have a diffrenet perpective:
+
+```{r}
+wordcloud(names(tt2), freq=tt2, min.freq = 7, scale=c(4, .4), max.words=20, colors=brewer.pal(8,"Set2"), rot.per=.3 ,random.color=T)
+```
+
+ Again, the wordcloud shows that the most commonly expected skill that job describtions on CyberCoders has is Machine Learning (Although we have rescaled our wordcloud, MACHINE LEARNING still might not be fit on page. Therefore, it might not be plotted here.). It can easily be said that Data Mining, Python, Hadoop, SQL are also very important according to the descriptions on this specific website. Since wordcloud and the previous dotplot are plotted using the same data, it shouldn't be surprising to get the same results.
+
+
+
+Reference: Code taken from Nolan, D. and Temple Lang. Data Science in R: A Case Studies Approach to Computational Reasoning and Problem Solving. CRC Press, 04/2015. VitalBook file.
+
