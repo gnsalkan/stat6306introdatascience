@@ -104,7 +104,7 @@ esteem$Income2005 <- log(esteem$Income2005)
 
 We'll now explore the dependence of the probability that a person has positive self-esteem on log annual income (Income2005), intelligence (AFQT), years of education (educ), and gender.
 
-Let's fit rogistic model first:
+Let's fit logistic model first:
 
 
 ```r
@@ -169,7 +169,7 @@ Each one percentile increase in AFQT score is associated with an estimated 0.76%
 
 Associated with each one additional year of education was estimated 7.6% increase in the odds of highest self esteem response( Confidence Interval: 3.5%, 11.7%).
 
-(ALthough gender is not a good estimator, let's make its interpretation too. After accounting for all other variables, the odds of highest self esteem response were estimated to be 14.6% lower for males than for females.)
+(Although gender is not a good estimator, let's make its interpretation too. After accounting for all other variables, the odds of highest self esteem response were estimated to be 14.6% lower for males than for females.)
 
 (In summary, not all variables are needed to obtain the best classification for this dataset.)
 
@@ -185,12 +185,12 @@ head(esteem.train)
 
 ```
 ##   Income2005   AFQT Educ
-## 1   8.612503  6.841   12
 ## 2  11.082143 99.393   16
 ## 3   9.852194 47.412   12
-## 5  11.082143 59.683   14
+## 4  10.491274 44.022   14
 ## 6   8.987197 72.313   16
 ## 7  11.170435 50.283   13
+## 8  10.668955 89.669   13
 ```
 
 ```r
@@ -200,12 +200,12 @@ head(esteem.test)
 
 ```
 ##    Income2005   AFQT Educ
-## 4    10.49127 44.022   14
-## 9    11.69525 95.977   13
-## 10   11.06664 67.021   17
-## 14   11.92127  6.069   13
-## 21   10.64542 78.095   19
-## 22   11.10208 75.473   12
+## 1    8.612503  6.841   12
+## 5   11.082143 59.683   14
+## 10  11.066638 67.021   17
+## 13  11.350407 25.905   12
+## 14  11.921266  6.069   13
+## 16  11.156251 12.788   12
 ```
 
 Lastly, let's obtain corresponding table :
@@ -232,24 +232,24 @@ CrossTable(x = esteem.testLabels, y = esteem_pred, prop.chisq=FALSE)
 ## |-------------------------|
 ## 
 ##  
-## Total Observations in Table:  867 
+## Total Observations in Table:  880 
 ## 
 ##  
 ##                   | esteem_pred 
 ## esteem.testLabels |         0 |         1 | Row Total | 
 ## ------------------|-----------|-----------|-----------|
-##                 0 |       171 |       195 |       366 | 
-##                   |     0.467 |     0.533 |     0.422 | 
-##                   |     0.449 |     0.401 |           | 
-##                   |     0.197 |     0.225 |           | 
+##                 0 |       160 |       229 |       389 | 
+##                   |     0.411 |     0.589 |     0.442 | 
+##                   |     0.468 |     0.426 |           | 
+##                   |     0.182 |     0.260 |           | 
 ## ------------------|-----------|-----------|-----------|
-##                 1 |       210 |       291 |       501 | 
-##                   |     0.419 |     0.581 |     0.578 | 
-##                   |     0.551 |     0.599 |           | 
-##                   |     0.242 |     0.336 |           | 
+##                 1 |       182 |       309 |       491 | 
+##                   |     0.371 |     0.629 |     0.558 | 
+##                   |     0.532 |     0.574 |           | 
+##                   |     0.207 |     0.351 |           | 
 ## ------------------|-----------|-----------|-----------|
-##      Column Total |       381 |       486 |       867 | 
-##                   |     0.439 |     0.561 |           | 
+##      Column Total |       342 |       538 |       880 | 
+##                   |     0.389 |     0.611 |           | 
 ## ------------------|-----------|-----------|-----------|
 ## 
 ## 

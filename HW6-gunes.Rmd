@@ -38,7 +38,7 @@ esteem$Income2005 <- log(esteem$Income2005)
 
 We'll now explore the dependence of the probability that a person has positive self-esteem on log annual income (Income2005), intelligence (AFQT), years of education (educ), and gender.
 
-Let's fit rogistic model first:
+Let's fit logistic model first:
 
 ```{r}
 ## fit logistic model
@@ -58,7 +58,7 @@ Each one percentile increase in AFQT score is associated with an estimated 0.76%
 
 Associated with each one additional year of education was estimated 7.6% increase in the odds of highest self esteem response( Confidence Interval: 3.5%, 11.7%).
 
-(ALthough gender is not a good estimator, let's make its interpretation too. After accounting for all other variables, the odds of highest self esteem response were estimated to be 14.6% lower for males than for females.)
+(Although gender is not a good estimator, let's make its interpretation too. After accounting for all other variables, the odds of highest self esteem response were estimated to be 14.6% lower for males than for females.)
 
 (In summary, not all variables are needed to obtain the best classification for this dataset.)
 
