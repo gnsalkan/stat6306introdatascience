@@ -1,0 +1,93 @@
+---
+title: "Homework 6"
+author: "Gunes Alkan"
+date: "November 18, 2015"
+output: 
+  html_document: 
+    keep_md: yes
+---
+
+
+```{r}
+#First load required packages
+library(class)
+library(gmodels)
+```
+
+Now, let's read in the data, and see characteristics of variables:
+
+
+```{r}
+esteem <- read.csv("E:/ex1223.csv", header=TRUE)
+str(esteem)
+esteem$Esteem1 <- as.factor(esteem$Esteem1)
+head(esteem)
+
+```
+
+Let's construct a new binary variable from this variable, which takes the value 1 for strong agreement and 0 for agreement, disagreement, or strong disagreement. (combine 4 levels into 2), also transform Income2005 variable:
+
+```{r}
+## create a new var
+esteem$estnew <- ifelse((esteem$Esteem1 == 1), 1, 0)
+esteem$estnew <- as.factor(esteem$estnew)
+## log annual income
+esteem$Income2005 <- log(esteem$Income2005)
+
+```
+
+We'll now explore the dependence of the probability that a person has positive self-esteem on log annual income (Income2005), intelligence (AFQT), years of education (educ), and gender.
+
+Let's fit rogistic model first:
+
+```{r}
+## fit logistic model
+attach(esteem)
+myfit <- glm(estnew ~ Income2005 + AFQT + Educ + Gender, data = esteem, family = "binomial")
+summary(myfit)
+confint(myfit)  ## adds confidence intervals
+
+```
+
+Looking at the output of logistic procedure, the data provides evidence that at the alpha=0.05 level of significance gender is not a significant estimator (or classifier) of the self-esteem (p-value=0.0932).
+The quantitative effects of best classifiers as follows:
+
+It's estimated that each 1 unit increase in log of Income2005 is associated with 18% increase in the odds of the highest self esteem response (95% CI: (7.38, 25.9))
+
+Each one percentile increase in AFQT score is associated with an estimated 0.76% increase in the odds of highest self esteem response. (95% Confidence Interval: (0.40%, 1.12%)).
+
+Associated with each one additional year of education was estimated 7.6% increase in the odds of highest self esteem response( Confidence Interval: 3.5%, 11.7%).
+
+(ALthough gender is not a good estimator, let's make its interpretation too. After accounting for all other variables, the odds of highest self esteem response were estimated to be 14.6% lower for males than for females.)
+
+(In summary, not all variables are needed to obtain the best classification for this dataset.)
+
+Now let's continue with dividing dataset into two group: training and testing set for our best classifiers:
+
+```{r}
+## divide esteem into two groups:test and train
+ind <- sample(2, nrow(esteem), replace=TRUE, prob=c(0.67, 0.33))
+esteem.train <- esteem[ind==1, c("Income2005" , "AFQT" , "Educ" )]
+head(esteem.train)
+esteem.test <- esteem[ind==2,c("Income2005" , "AFQT" , "Educ" ) ]
+head(esteem.test)
+
+```
+
+Lastly, let's obtain corresponding table :
+
+```{r}
+## create labels for the table
+esteem.trainLabels <- esteem[ind==1, "estnew"]
+esteem.testLabels <- esteem[ind==2, "estnew"]
+esteem_pred <- knn(train = esteem.train, test = esteem.test, cl = esteem.trainLabels , k=2)
+## plot the table
+CrossTable(x = esteem.testLabels, y = esteem_pred, prop.chisq=FALSE)
+
+```
+
+
+
+
+
+
